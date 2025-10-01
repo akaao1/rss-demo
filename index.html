@@ -1,23 +1,3 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<title>国土交通省 重要なお知らせ（文字化け対策）</title>
-<style>
-  body { font-family: Arial, sans-serif; background: #f9f9f9; color: #333; padding: 20px; }
-  h1 { text-align: center; color: #004080; }
-  #rss-feed { max-width: 800px; margin: 20px auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-  .rss-item { border-bottom: 1px solid #ddd; padding: 10px 0; }
-  .rss-item:last-child { border-bottom: none; }
-  .rss-item a { text-decoration: none; color: #0066cc; font-weight: bold; }
-  .rss-item a:hover { text-decoration: underline; }
-  .rss-date { display: block; font-size: 0.9em; color: #666; margin-top: 4px; }
-</style>
-</head>
-<body>
-<h1>国土交通省 重要なお知らせ</h1>
-<div id="rss-feed">読み込み中...</div>
-
 <script>
 (async function() {
   const url = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('http://www.mlit.go.jp/important.rdf');
@@ -26,8 +6,16 @@
   try {
     const response = await fetch(url);
     const buffer = await response.arrayBuffer();
-    const decoder = new TextDecoder('shift_jis'); // ← ここがポイント
-    const text = decoder.decode(buffer);
+
+    // 複数のエンコーディング候補を試す
+    const encodings = ['shift_jis', 'euc-jp', 'iso-2022-jp', 'utf-8'];
+    let text = '';
+    for (const enc of encodings) {
+      try {
+        text = new TextDecoder(enc).decode(buffer);
+        if (text.includes('国土交通省') || text.includes('<title>')) break;
+      } catch(e) { continue; }
+    }
 
     const parser = new DOMParser();
     const xml = parser.parseFromString(text, 'application/xml');
@@ -57,5 +45,3 @@
   }
 })();
 </script>
-</body>
-</html>
