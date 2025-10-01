@@ -1,4 +1,4 @@
-fetch('https://api.rss2json.com/v1/api.json?rss_url=http://www.mlit.go.jp/important.rdf')
+fetch('https://feed2json.org/convert?url=http://www.mlit.go.jp/important.rdf')
   .then(response => response.json())
   .then(data => {
     const container = document.getElementById('rss-feed');
@@ -8,8 +8,8 @@ fetch('https://api.rss2json.com/v1/api.json?rss_url=http://www.mlit.go.jp/import
     }
     container.innerHTML = data.items.map(item => `
       <div class="rss-item">
-        ${item.link}${item.title}</a>
-        <span class="rss-date">${new Date(item.pubDate).toLocaleDateString('ja-JP')}</span>
+        ${item.url}${item.title}</a>
+        <span class="rss-date">${new Date(item.date_published).toLocaleDateString('ja-JP')}</span>
       </div>
     `).join('');
   })
