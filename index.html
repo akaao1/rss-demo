@@ -2,21 +2,181 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>国土交通省 重要なお知らせ</title>
+<title>国土交通省 重要なお知らせ（RSS表示）</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  body { font-family: Arial, sans-serif; background: #f9f9f9; color: #333; padding: 20px; }
-  h1 { text-align: center; color: #004080; }
-  #rss-feed { max-width: 800px; margin: 20px auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-  .rss-item { border-bottom: 1px solid #ddd; padding: 10px 0; }
+  :root {
+    --bg: #f9f9fb;
+    --fg: #222;
+    --accent: #004080;
+    --link: #0066cc;
+    --card: #fff;
+    --muted: #666;
+    --border: #e5e7eb;
+  }
+  html, body { margin:0; padding:0; background:var(--bg); color:var(--fg); font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif; }
+  header { padding: 24px 16px 8px; text-align:center; }
+  h1 { margin:0; color:var(--accent); font-size: clamp(20px, 3vw, 28px); }
+  main { max-width: 880px; margin: 0 auto; padding: 8px 16px 32px; }
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    padding: 20px;
+  }
+  #status {
+    display:flex; align-items:center; gap:10px;
+    color: var(--muted); font-size: 14px; padding: 6px 0 16px;
+  }
+  .spinner {
+    width:16px; height:16px; border-radius:50%;
+    border: 2px solid #cbd5e1; border-top-color: var(--accent);
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .rss-item { border-bottom: 1px solid var(--border); padding: 12px 0; }
   .rss-item:last-child { border-bottom: none; }
-  .rss-item a { text-decoration: none; color: #0066cc; font-weight: bold; }
+  .rss-item a {
+    text-decoration: none; color: var(--link); font-weight: 600;
+  }
   .rss-item a:hover { text-decoration: underline; }
-  .rss-date { display: block; font-size: 0.9em; color: #666; margin-top: 4px; }
+  .rss-date {
+    display:block; font-size: 12px; color: var(--muted); margin-top: 4px;
+  }
+  .error { color:#b91c1c; }
+  footer { color: var(--muted); font-size: 12px; text-align:center; padding-top: 16px; }
+  code { background:#f3f4f6; padding:2px 4px; border-radius:4px; }
 </style>
 </head>
 <body>
-<h1>国土交通省 重要なお知らせ</h1>
-<div id="rss-feed">読み込み中...</div>
-rss.js</script>
+  <header>
+    <h1>国土交通省 重要なお知らせ</h1>
+  </header>
+
+  <main>
+    <div class="panel">
+      <div id="status"><span class="spinner" aria-hidden="true"></span> <span>読み込み中...</span></div>
+      <div id="rss-feed" aria-live="polite"></div>
+    </div>
+    <footer>
+      ソース: <code>http://www.mlit.go.jp/important.rdf</code>（RDF / RSS 1.0）
+    </footer>
+  </main>
+
+  <script>
+  (async function () {
+    const FEED_URL = 'http://www.mlit.go.jp/important.rdf';
+    const FEED2JSON = 'https://feed2json.org/convert?url=' + encodeURIComponent(FEED_URL);
+    const ALLORIGINS_RAW = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(FEED_URL) + '&_=' + Date.now();
+
+    const statusEl = document.getElementById('status');
+    const feedEl = document.getElementById('rss-feed');
+
+    function setStatus(html, isError=false) {
+      statusEl.innerHTML = html;
+      if (isError) statusEl.classList.add('error'); else statusEl.classList.remove('error');
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function fmt(dateStr) {
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) return '';
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      return `${y}/${m}/${dd}`;
+    }
+
+    function render(items) {
+      const max = 10;
+      feedEl.innerHTML = items.slice(0, max).map(i => `
+        <div class="rss-item">
+          ${escapeHtml(i.link)}${escapeHtml(i.title)}</a>
+          ${i.date ? `<span class="rss-date">${fmt(i.date)}</span>` : ''}
+        </div>
+      `).join('');
+    }
+
+    async function fetchJSON(url) {
+      const res = await fetch(url, {cache: 'no-store'});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return await res.json();
+    }
+
+    async function fetchText(url) {
+      const res = await fetch(url, {cache: 'no-store'});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return await res.text();
+    }
+
+    function parseRDF(xmlText) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(xmlText, 'application/xml');
+      const err = doc.querySelector('parsererror');
+      if (err) {
+        console.error('XML parse error', err.textContent);
+        throw new Error('XML parse error');
+      }
+      const DC_NS = 'http://purl.org/dc/elements/1.1/';
+      const items = Array.from(doc.getElementsByTagName('item')).map(node => {
+        const title = node.getElementsByTagName('title')[0]?.textContent?.trim() || '';
+        const link = node.getElementsByTagName('link')[0]?.textContent?.trim()
+                      || node.getAttribute('rdf:about') || '';
+        const dcDate = node.getElementsByTagNameNS(DC_NS, 'date')[0]?.textContent?.trim() || '';
+        return { title, link, date: dcDate };
+      }).filter(x => x.title && x.link);
+
+      // 日付があれば降順に
+      items.sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+      return items;
+    }
+
+    // --- 取得フロー ---
+    try {
+      // 1) feed2json（RSS1.0対応JSON化）
+      setStatus('<span class="spinner"></span> feed2jsonで取得中...');
+      const data = await fetchJSON(FEED2JSON);
+      if (data && Array.isArray(data.items) && data.items.length > 0) {
+        const items = data.items.map(it => ({
+          title: it.title || '',
+          link: it.url || it.external_url || it.id || '',
+          date: it.date_published || it.date_modified || ''
+        })).filter(x => x.title && x.link);
+
+        if (items.length > 0) {
+          render(items);
+          setStatus(''); // ステータス非表示
+          console.info('表示: feed2json（件数: ' + items.length + '）');
+          return;
+        }
+      }
+      console.warn('feed2json: itemsなし or 解析不可。XML直パースへフォールバック。');
+    } catch (e) {
+      console.warn('feed2json失敗:', e);
+    }
+
+    // 2) XML直パース（AllOrigins経由でCORS回避）
+    try {
+      setStatus('<span class="spinner"></span> XMLを直接取得中（フォールバック）...');
+      const xmlText = await fetchText(ALLORIGINS_RAW);
+      const items = parseRDF(xmlText);
+      if (items.length > 0) {
+        render(items);
+        setStatus('');
+        console.info('表示: XML直パース（件数: ' + items.length + '）');
+        return;
+      }
+      throw new Error('XML直パースで項目なし');
+    } catch (e) {
+      console.error('XMLフォールバックも失敗:', e);
+      setStatus('RSSの読み込みに失敗しました。時間をおいて再度お試しください。', true);
+    }
+  })();
+  </script>
 </body>
 </html>
